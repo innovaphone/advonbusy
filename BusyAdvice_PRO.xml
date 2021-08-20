@@ -2,28 +2,32 @@
 <voicemail>
 <!-- innovaphone busyadvice == innovaphone srl kwa 12/2010                                                     	-->
 <!-- Extended version written by Vcom, Norway, 01/2012 "BusyAdvice PRO"                                        	-->
-<!-- All users can forward CFU/CFB/CFNR to this VM scrips and receiwe message about lost calls.			-->
-<!-- Message can be receiwed on phone or/and on E-mail.								-->
-<!-- It is also possible to call direct to the script or from IVR be transfered to the VM script.		-->
-<!-- In this case message is sent to agent set in the file agent_ext.txt and agent_mail.txt			-->
+<!-- Extended version 2 written by Vcom, Norway, 10/2012 "BusyAdvice PRO" with personal messages and DTMF-choises-->
+<!-- in sub-folder \<user-number>. If no sub folder exist, values from root is used.							-->
 
-<!-- Multippel DTMF choices:											-->
-<!--	- press 1: call back service										-->
-<!--	- press 2: transfered to Voicemail number set in the file VM.txt					-->
-<!--	- press 3: transfered to number set in the file user3.txt						-->
-<!--	- press *: transfered to number set in the file userStar.txt						-->
-<!--	- press #: transfered to number set in the file userHash.txt						-->
+<!-- All users can forward CFU/CFB/CFNR to this VM scrips and receiwe message about lost calls.					-->
+<!-- Message can be receiwed on phone or/and on E-mail.															-->
+<!-- It is also possible to call direct to the script or from IVR be transfered to the VM script.				-->
+<!-- In this case message is sent to agent set in the file agent_ext.txt and agent_mail.txt						-->
+
+<!-- Multippel DTMF choices:																				-->
+<!--	- press 1: call back service																		-->
+<!--	- press 2: transfered to Voicemail number set in the file \VM.txt									-->
+<!--	- press 3: transfered to number set in the file \user3.txt or \<user-number>\user3.txt if exist		-->
+<!--	- press *: transfered to number set in the file userStar.txt or \<user-number>\userStar.txt if exist-->
+<!--	- press #: transfered to number set in the file userHash.txt or \<user-number>\userHash.txt if exist-->
 
 <!-- Other fixed values given in txt files:									-->
 <!--	- agent_ext.txt		Extention number for phone message when call transfered from waiting queue	-->
-<!--	- agent_mail.txt	mail address for message when call transfered from waiting queue		-->
-<!--	- Message_WQ.txt	Message sent when call transfered from waiting queue				-->
-<!--	- Message_User.txt	Message sent when call forwarded from an user					-->
-<!--	- Message_Subject.txt	Subject in message sent by E-mail 						-->
-<!--	- Server.txt		outgoing mail server, ip address or domain.					-->
+<!--	- agent_mail.txt	mail address for message when call transfered from waiting queue			-->
+<!--	- Message_WQ.txt	Message sent when call transfered from waiting queue						-->
+<!--	- Message_User.txt	Message sent when call forwarded from an user								-->
+<!--	- Message_Subject.txt	Subject in message sent by E-mail 										-->
+<!--	- Server.txt		outgoing mail server, ip address or domain.									-->
 
-<!-- Promt files used in the script are in local language and in English language. 				-->
-<!-- If the call is from abroad (000....), English promts are used.						-->
+<!-- Promt files used in the script are in local language and in English language. 			-->
+<!-- If the call is from abroad (000....), English promts are used.							-->
+<!-- From version 2, personal promt files have to be stored in folder \<user-number>\		-->
 
 
 <!-- Rutine to check users URL-field for E-mail address -->
@@ -50,12 +54,26 @@
 <!-- Rutine to Interupt and forward the call to the number set in the file 'userX.txt' when pressing DTMF -->
     <function define="DTMF-action">
 
-	<if cond="$abroad">
-		<store-get root="" name="DTMF_choice_ENG.$coder" out-url="$ctrl" /> 
-	</if>
-	<else>
-		<store-get root="" name="DTMF_choice.$coder" out-url="$ctrl" /> 
-	</else>
+		<if cond="$abroad"> 	<!-- English promts -->
+			<store-getstat root="$sub" name="DTMF_choice_ENG.g711a" out-error="$error"/>
+			<if notcond="$error">
+				<store-get root="$sub" name="DTMF_choice_ENG.$coder" out-url="$ctrl" />
+			</if>
+			<else>
+				<!-- If no personal "DTMF_choice_ENG.g711a" file exist, root = "" -->
+				<store-get root="" name="DTMF_choice_ENG.$coder" out-url="$ctrl" />
+			</else>
+		</if>
+		<else> 	<!-- Domestic promts -->	            
+			<store-getstat root="$sub" name="DTMF_choice.g711a" out-error="$error"/>
+			<if notcond="$error">
+				<store-get root="$sub" name="DTMF_choice.$coder" out-url="$ctrl" />
+			</if>
+			<else>
+				<!-- If no personal "DTMF_choice.g711a" file exist, root = "" -->
+				<store-get root="" name="DTMF_choice.$coder" out-url="$ctrl" />
+			</else>
+		</else>
 
         <event type="dtmf" block="false">
             <pbx-getdtmfdigit out-dtmf="$dtmf" />
@@ -111,6 +129,9 @@
 		<assign out="$dtmf" value="1"/>					<!-- DTMF=1 (callback) as default without DTMF choices. -->
 	</if>
 	<else>
+
+		<assign out="$sub" value="$leg2"/>			<!-- Personal promts and DTMF-choises in sub folder -->
+       
 		<call name="DTMF-action"/>					<!--Ask for DTMF choises. Delete this line if no choises wants -->
 	</else>
 
@@ -171,18 +192,40 @@
                 </case>
 
                 <case equal="3">					<!-- transfer to user3.txt -->
-                	<store-cookie root="" name="user3.txt" out="$userdummy" />
-                	<pbx-xfer e164="$userdummy" />
+					<store-getstat root="$sub" name="user3.txt" out-error="$error"/>
+					<if notcond="$error">
+						<store-cookie root="$sub" name="user3.txt" out="$userdummy" />
+						</if>
+					<else>
+						<!-- If no personal User3.txt files exist, root = "" -->
+						<store-cookie root="" name="user3.txt" out="$userdummy" />
+						</else>
+					<pbx-xfer e164="$userdummy" />
                 </case>
 
                 <case equal="*">					<!-- transfer to userStar.txt -->
-                	<store-cookie root="" name="userStar.txt" out="$userdummy" />
-                	<pbx-xfer e164="$userdummy" />
+					<store-getstat root="$sub" name="userStar.txt" out-error="$error"/>
+					<if notcond="$error">
+						<store-cookie root="$sub" name="userStar.txt" out="$userdummy" />
+						</if>
+					<else>
+						<!-- If no personal UserStar.txt files exist, root = "" -->
+						<store-cookie root="" name="userStar.txt" out="$userdummy" />
+						</else>
+					<pbx-xfer e164="$userdummy" />
+
                 </case>
 
                 <case equal="#">					<!-- transfer to userHash.txt -->
-                	<store-cookie root="" name="userHash.txt" out="$userdummy" />
-                	<pbx-xfer e164="$userdummy" />
+					<store-getstat root="$sub" name="userHash.txt" out-error="$error"/>
+					<if notcond="$error">
+						<store-cookie root="$sub" name="userHash.txt" out="$userdummy" />
+						</if>
+					<else>
+						<!-- If no personal UserHash.txt files exist, root = "" -->
+						<store-cookie root="" name="userHash.txt" out="$userdummy" />
+						</else>
+					<pbx-xfer e164="$userdummy" />
                 </case>
 
                 <case equal="9">					<!-- disconnect -->
@@ -195,6 +238,9 @@
 </voicemail>
 
 
+<!-- Busy Advice PRO wiki-src/xml/BusyAdv_PRO 2,0,0,0 (C) Vcom as, Norway 2012 -->
 <!-- Busy Advice PRO wiki-src/xml/BusyAdv_PRO 1,0,0,0 (C) Vcom as, Norway 2012 -->
 
 <!-- Advice On Busy wiki-src/xml/AdvOnBusy 1,0,0,0 (C) innovaphone AG 2010-2012 -->
+
+<!-- Advice On Busy wiki-src/xml/AdvOnBusy 1,0,1,0 (C) innovaphone AG 2010-2012 -->

@@ -1,0 +1,4 @@
+No idle agents in your waiting queue, please call me back 
+Ikke svar på sentralbordet, vennligst ring meg tilbake 
+
+NOTE: Only one sentence left (with one space after last letter), delete the other line in this file.

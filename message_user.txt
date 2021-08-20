@@ -1,0 +1,4 @@
+You were busy, please call me back 
+Du var opptatt, ring meg tilbake 
+
+NOTE: Only one sentence (with one space after last letter). Delete all other sentence in this file.

@@ -1,0 +1,4 @@
+Call back to 
+Ring tilbake til 
+
+NOTE: Only one sentence (with one space after last letter). Delete all other lines in this file.

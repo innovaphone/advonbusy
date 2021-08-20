@@ -1,0 +1,200 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+<voicemail>
+<!-- innovaphone busyadvice == innovaphone srl kwa 12/2010                                                     	-->
+<!-- Extended version written by Vcom, Norway, 01/2012 "BusyAdvice PRO"                                        	-->
+<!-- All users can forward CFU/CFB/CFNR to this VM scrips and receiwe message about lost calls.			-->
+<!-- Message can be receiwed on phone or/and on E-mail.								-->
+<!-- It is also possible to call direct to the script or from IVR be transfered to the VM script.		-->
+<!-- In this case message is sent to agent set in the file agent_ext.txt and agent_mail.txt			-->
+
+<!-- Multippel DTMF choices:											-->
+<!--	- press 1: call back service										-->
+<!--	- press 2: transfered to Voicemail number set in the file VM.txt					-->
+<!--	- press 3: transfered to number set in the file user3.txt						-->
+<!--	- press *: transfered to number set in the file userStar.txt						-->
+<!--	- press #: transfered to number set in the file userHash.txt						-->
+
+<!-- Other fixed values given in txt files:									-->
+<!--	- agent_ext.txt		Extention number for phone message when call transfered from waiting queue	-->
+<!--	- agent_mail.txt	mail address for message when call transfered from waiting queue		-->
+<!--	- Message_WQ.txt	Message sent when call transfered from waiting queue				-->
+<!--	- Message_User.txt	Message sent when call forwarded from an user					-->
+<!--	- Message_Subject.txt	Subject in message sent by E-mail 						-->
+<!--	- Server.txt		outgoing mail server, ip address or domain.					-->
+
+<!-- Promt files used in the script are in local language and in English language. 				-->
+<!-- If the call is from abroad (000....), English promts are used.						-->
+
+
+<!-- Rutine to check users URL-field for E-mail address -->
+    <function define="Check_mail_URL">
+        <assign out="$i" value="1"/>
+        <assign out="$c" value=""/>
+        <index value="$to" pos="$i" size="1" out="$c"/>
+        <lib-strlen string="$c" out="$len-c" />
+        <while cond="$len-c">
+            <switch var="$c">
+                <case equal="@">
+                    <return/>          <!-- '@' found, smells like an email address -->
+                </case>
+            </switch>
+
+            <add value="$i" value2="1" out="$i"/>
+            <assign out="$c" value=""/>
+            <index value="$to" pos="$i" size="1" out="$c"/>
+            <lib-strlen string="$c" out="$len-c" />
+        </while>
+        <assign out="$to" value=""/>   <!-- doesn't seem to be an email address -->
+    </function>
+
+<!-- Rutine to Interupt and forward the call to the number set in the file 'userX.txt' when pressing DTMF -->
+    <function define="DTMF-action">
+
+	<if cond="$abroad">
+		<store-get root="" name="DTMF_choice_ENG.$coder" out-url="$ctrl" /> 
+	</if>
+	<else>
+		<store-get root="" name="DTMF_choice.$coder" out-url="$ctrl" /> 
+	</else>
+
+        <event type="dtmf" block="false">
+            <pbx-getdtmfdigit out-dtmf="$dtmf" />
+            <switch var="$dtmf">
+                <case equal="1">	<!-- activate call back -->
+                </case>
+
+                <case equal="2">	<!-- transfer to Voicemail -->
+                </case>
+
+                <case equal="3">	<!-- transfer to user3.txt -->
+                </case>
+
+                <case equal="*">	<!-- transfer to userStar.txt -->
+                </case>
+
+                <case equal="#">	<!-- transfer to userHash.txt -->
+                </case>
+
+                <default>		<!-- disconnect -->
+		<assign out="$dtmf" value="9"/>
+                </default>
+
+            </switch>
+
+        </event>
+	<while notcond="$dtmf">
+		<pbx-prompt url="$ctrl"  repeat="False" />
+	</while>
+
+    </function>
+
+
+<!-- Hovedprogram -->
+<function define="Main">
+
+	<pbx-getcallinfo out-cgpn="$cgpn" out-cdpn="$cdpn" out-leg2="$leg2" />	<!-- read number info from forwarded call  -->
+					
+        <index value="$cgpn" pos="1" size="3" out="$prefix"/>			<!-- check cgpn=000 (call from abroad, switch to English voice prompts  -->
+            <switch var="$prefix">
+                <case equal="000">
+		<assign out="$abroad" value="true"/>
+                </case>
+            </switch>
+
+
+	<event type="timer" name="vbguard">
+       		<pbx-disc/>
+	</event>
+        <timer name="vbguard" sec="26"/>  
+
+	<if notcond="$leg2">							<!-- If leg2 not exist, the call is not CFU/CFB, but transfered from WQ maps -->
+		<assign out="$dtmf" value="1"/>					<!-- DTMF=1 (callback) as default without DTMF choices. -->
+	</if>
+	<else>
+		<call name="DTMF-action"/>					<!--Ask for DTMF choises. Delete this line if no choises wants -->
+	</else>
+
+
+	<switch var="$dtmf">
+		<case equal="1">						<!-- Execute CallBack -->
+
+		<if notcond="$leg2">							<!-- If leg2 not exist, the call is not CFU/CFB, but transfered from WQ maps -->
+			<store-cookie root="" name="agent_ext.txt" out="$agent_ext"/>	<!-- message has to be send to agent_ext, because of no leg2 number -->
+			<store-cookie root="" name="agent_mail.txt" out="$agent_mail"/>
+			<assign out="$to" value="$agent_mail"/>				<!-- to-address for Email = agent_mail.txt -->
+			<store-cookie root="" name="message_WQ.txt" out="$message"/>
+		</if>
+		<else>
+			<assign out="$agent_ext" value="$leg2"/>			<!-- message has to be send to leg2 number, the call is CFU/CFB -->
+			<pbx-finduser-e164 e164="$agent_ext" out-cn="$cn"/>		<!-- find URL in agnet_ext User object -->
+	                <pbx-query-obj name="$cn" type="url" out="$to"/>
+			<if cond="$to">
+      	        		<call name="Check_mail_URL"/>			<!--Exist E-mail address in URL? -->
+			</if>
+			<store-cookie root="" name="message_user.txt" out="$message"/>
+		</else>
+
+		<lib-strcat out-string="$phone_message" string="$message" string2="$cgpn"/>
+		<pbx-im cgpn="$cgpn" e164="$agent_ext" text="$phone_message"/>	<!-- sending message to the phone -->
+
+		<if cond="$to">							<!-- If address for E-mail (to) not empty, send E-mail -->
+			<assign out="$from" value="$to"/>               	<!--from email = to address by default-->
+			<assign out="$fromname" value="innovaphone PBX"/>	<!--optional, sender name in E-mail -->
+			<store-cookie root="" name="message_subject.txt" out="$message_subject"/>
+			<store-cookie root="" name="server.txt" out="$server"/>
+			<assign out="$user" value=""/>      			<!--optional, authentication info-->
+			<assign out="$password" value=""/>   			<!--optional, authentication info-->
+			<assign out="$file" value=""/>       			<!-- <assign out="$file" value="$vm"/> enclosure -->
+
+			<exec url="mailto:$to?fromname=$fromname&amp;from=$from&amp;subject=$message_subject&amp;subject=$cgpn&amp;body=$message&amp;body=$cgpn&amp;srv=$server&amp;usr=$user&amp;pwd=$password&amp;file=$file"/>
+
+		</if>
+
+		<if cond="$abroad">
+			<store-get root="" name="voice_response_ENG.$coder" out-url="$ctrl" /> 
+			</if>
+		<else>
+			<store-get root="" name="voice_response.$coder" out-url="$ctrl" /> 
+			</else>
+
+		<pbx-prompt url="$ctrl"  repeat="False" />      	      <!-- promt message for caller -->
+		<pbx-disc/>
+                </case>
+
+                <case equal="2">					<!-- transfer to voicemail object stated in file VM.txt -->
+                	<store-cookie root="" name="VM.txt" out="$VM" />
+			<lib-strcat string="$VM" string2="$leg2" out-string="$VMbox"/>
+			<assign out="$VM_redirect" value="VM_redirect"/>
+
+			<pbx-upd-obj name="$VM_redirect" type="cfu" value="$VMbox"/>
+			<pbx-xfer name="$VM_redirect" />
+                </case>
+
+                <case equal="3">					<!-- transfer to user3.txt -->
+                	<store-cookie root="" name="user3.txt" out="$userdummy" />
+                	<pbx-xfer e164="$userdummy" />
+                </case>
+
+                <case equal="*">					<!-- transfer to userStar.txt -->
+                	<store-cookie root="" name="userStar.txt" out="$userdummy" />
+                	<pbx-xfer e164="$userdummy" />
+                </case>
+
+                <case equal="#">					<!-- transfer to userHash.txt -->
+                	<store-cookie root="" name="userHash.txt" out="$userdummy" />
+                	<pbx-xfer e164="$userdummy" />
+                </case>
+
+                <case equal="9">					<!-- disconnect -->
+			<pbx-disc/>
+                </case>
+
+	</switch>
+
+</function>
+</voicemail>
+
+
+<!-- Busy Advice PRO wiki-src/xml/BusyAdv_PRO 1,0,0,0 (C) Vcom as, Norway 2012 -->
+
+<!-- Advice On Busy wiki-src/xml/AdvOnBusy 1,0,0,0 (C) innovaphone AG 2010-2012 -->
